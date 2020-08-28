@@ -34,6 +34,16 @@ namespace TinaX.TS
         private string m_JsFileExtension;
 
         /// <summary>
+        /// 记录最后一次加载的Js文件的内容
+        /// </summary>
+        private string m_LastLoadCache_Content { get; set;}
+
+        /// <summary>
+        /// 记录最后一次加载的Js文件的路径
+        /// </summary>
+        private string m_LastLoadCache_Path { get; set; }
+
+        /// <summary>
         /// 构造函数
         /// </summary>
         /// <param name="assets">框架的内置服务接口</param>
@@ -52,10 +62,21 @@ namespace TinaX.TS
 
         public bool FileExists(string filepath)
         {
+            m_LastLoadCache_Content = string.Empty;
+            m_LastLoadCache_Path = string.Empty;
+
             //检查是不是puerts内部方法
             if (filepath.StartsWith("puerts/"))
             {
-                return UnityEngine.Resources.Load(filepath) != null; //TODO : 这儿应该会有问题，浪费性能
+                var ta = Resources.Load<TextAsset>(filepath);
+                if (ta == null)
+                    return false;
+                else
+                {
+                    m_LastLoadCache_Path = filepath; //记录缓存
+                    m_LastLoadCache_Content = ta.text;
+                    return true;
+                }
             }
             //使用同步方式加载资源
             try
@@ -65,8 +86,11 @@ namespace TinaX.TS
                 var ta = m_Assets.Load<TextAsset>(path);
 
                 if (ta != null)
+                {
+                    m_LastLoadCache_Path = path;
+                    m_LastLoadCache_Content = ta.text;
                     m_Assets.Release(ta);
-                //TODO 待会看看这里的判断存在和下面的加载 之间的关系，能不能缓存点数据下来
+                }
                 return true;
             }
             catch
@@ -80,12 +104,26 @@ namespace TinaX.TS
             //检查是不是puerts内部方法
             if (filepath.StartsWith("puerts/"))
             {
+                //检查是否有缓存，有的话直接返回
+                if (!m_LastLoadCache_Path.IsNullOrEmpty() && m_LastLoadCache_Path.Equals(filepath))
+                {
+                    debugpath = filepath;
+                    return m_LastLoadCache_Content;
+                }
                 UnityEngine.TextAsset file = (UnityEngine.TextAsset)UnityEngine.Resources.Load(filepath);
                 debugpath = filepath;
                 return file == null ? null : file.text;
             }
             string path = filepath;
             LoadFilePathHandle(ref path);
+
+            //检查缓存
+            if (!m_LastLoadCache_Path.IsNullOrEmpty() && m_LastLoadCache_Path.Equals(path))
+            {
+                debugpath = filepath; //TODO
+                return m_LastLoadCache_Content;
+            }
+
             var ta_js_file = m_Assets.Load<TextAsset>(path);
             string code = ta_js_file.text;
             m_Assets.Release(ta_js_file);
